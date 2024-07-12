@@ -63,8 +63,8 @@ or replace NOTIFICATION INTEGRATION my_notification_integration
 ENABLED = TRUE 
 TYPE = QUEUE 
 NOTIFICATION_PROVIDER = AZURE_STORAGE_QUEUE 
-AZURE_STORAGE_QUEUE_PRIMARY_URI = 'https://data1508.queue.core.windows.net/queue1'
-COMMENT = 'Integration for notifying Azure queue' AZURE_TENANT_ID = '32641cde-a79d-4122-9987-a1c87fe734e1';
+AZURE_STORAGE_QUEUE_PRIMARY_URI = 'https://data1xxxx.queue.core.windows.net/queue1'
+COMMENT = 'Integration for notifying Azure queue' AZURE_TENANT_ID = '32641cde-a79d-xxxx-xxxx-a1c87fe734e1';
 
 desc NOTIFICATION integration my_notification_integration;
 --click AZURE_CONSENT_URL and then in  azure portal in 'data1508' IAM give 'storage queue contributor' to 'AZURE_MULTI_TENANT_APP_NAME'
