@@ -1,0 +1,201 @@
+create
+or replace TABLE PROJECT_DB.EMP_SCHEMA2.HIGH_PERFORMERS (
+    EMPLOYEE_ID NUMBER(38, 0),
+    REVIEW_DATE DATE,
+    PERFORMANCE_SCORE NUMBER(38, 1),
+    SALES_AMOUNT NUMBER(38, 7),
+    PROJECTS_COMPLETED NUMBER(38, 0),
+    HOURS_WORKED NUMBER(38, 2),
+    _RESCUED_DATA VARCHAR(16777216),
+    FIRST_NAME VARCHAR(16777216),
+    LAST_NAME VARCHAR(16777216),
+    GENDER VARCHAR(16777216),
+    DATE_OF_BIRTH DATE,
+    HIRE_DATE DATE,
+    DEPARTMENT_ID NUMBER(38, 0),
+    JOB_TITLE VARCHAR(16777216)
+);
+create
+or replace TABLE PROJECT_DB.EMP_SCHEMA2.PERFORMANCE_YR (
+    EMPLOYEE_ID NUMBER(38, 0),
+    "2022" NUMBER(38, 1)
+);
+create
+or replace TABLE PROJECT_DB.EMP_SCHEMA2.TOTAL_SALES_BY_DEPT (
+    DEPARTMENT_ID NUMBER(38, 0),
+    TOTAL_SALES_AMOUNT NUMBER(38, 10)
+);
+create
+or replace TABLE PROJECT_DB.EMP_SCHEMA2.AVG_PER_DEPT (
+    DEPARTMENT_ID NUMBER(38, 0),
+    AVERAGE_PERFORMANCE_SCORE NUMBER(38, 2)
+);
+------------------------------------------------------------------------------
+CREATE
+OR REPLACE STORAGE INTEGRATION snow_azure_int 
+TYPE = EXTERNAL_STAGE 
+STORAGE_PROVIDER = AZURE
+ENABLED = TRUE
+AZURE_TENANT_ID = '32641cde-a79d-4122-9987-a1c87fe734e1' STORAGE_ALLOWED_LOCATIONS = (
+    'azure://data1508.blob.core.windows.net/samples/',
+    'azure://data1508.blob.core.windows.net/outputs/',
+    'azure://data1508.blob.core.windows.net/curated/'
+);
+-------------------------------------------------------------------------------
+desc storage integration snow_azure_int;
+create
+or replace file format project_db.project_schema.csv_ff 
+TYPE = 'CSV' FIELD_OPTIONALLY_ENCLOSED_BY = '"' SKIP_HEADER = 1 
+FIELD_DELIMITER = ',' 
+RECORD_DELIMITER = '\n'
+NULL_IF = ('NULL', 'null');
+desc integration snow_azure_int;
+-----------------------------------------------------------------
+CREATE
+OR REPLACE STAGE my_blob_stage URL = 'azure://data1508.blob.core.windows.net/curated/'
+STORAGE_INTEGRATION = snow_azure_int 
+FILE_FORMAT = project_db.project_schema.csv_ff;
+show stages;
+----------------------------------------------------------------------------------
+----------------------------------------------------------------------------
+CREATE
+or replace NOTIFICATION INTEGRATION my_notification_integration 
+ENABLED = TRUE 
+TYPE = QUEUE 
+NOTIFICATION_PROVIDER = AZURE_STORAGE_QUEUE 
+AZURE_STORAGE_QUEUE_PRIMARY_URI = 'https://data1508.queue.core.windows.net/queue1'
+COMMENT = 'Integration for notifying Azure queue' AZURE_TENANT_ID = '32641cde-a79d-4122-9987-a1c87fe734e1';
+
+desc NOTIFICATION integration my_notification_integration;
+--click AZURE_CONSENT_URL and then in  azure portal in 'data1508' IAM give 'storage queue contributor' to 'AZURE_MULTI_TENANT_APP_NAME'
+--------------------------------------------------------------
+CREATE
+OR REPLACE TABLE staging_table (filename varchar, raw_data VARIANT);
+------------------------------------------------------------
+CREATE
+OR REPLACE PIPE my_pipe AUTO_INGEST = TRUE 
+INTEGRATION = my_notification_integration 
+AS 
+COPY INTO EMP_SCHEMA.staging_table
+FROM
+    (
+        SELECT
+            METADATA$FILENAME,
+            OBJECT_CONSTRUCT(
+                'col1',   $1, 'col2', $2, 'col3',  $3,'col4', $4, 'col5',  $5,  'col6',   $6,
+                'col7', $7,'col8', $8, 'col9',   $9, 'col10',  $10,   'col11',   $11,
+                'col12',$12, 'col13', $13,'col14',  $14, 'col15', $15,'col16',  $16
+            )
+        FROM
+            @my_blob_stage
+    ) FILE_FORMAT = (FORMAT_NAME = 'project_db.project_schema.csv_ff') PATTERN = '.*\.csv';
+    -----------------------------------------
+    ---------------------------------
+SELECT
+    SYSTEM$PIPE_STATUS('my_pipe');
+    -----------------------------------------
+    truncate table EMP_SCHEMA.staging_table;
+select
+    *
+from
+    EMP_SCHEMA.staging_table;
+LIST @my_blob_stage;
+    ----------------
+    COPY INTO EMP_SCHEMA.staging_table(filename, raw_data)
+FROM
+    (
+        SELECT
+            METADATA$FILENAME,
+            OBJECT_CONSTRUCT(
+                'col1',     $1,
+                'col2',     $2,
+                'col3',     $3,
+                'col4',     $4,
+                'col5',     $5,
+                'col6',     $6,
+                'col7',     $7,
+                'col8',     $8,
+                'col9',     $9,
+                'col10',    $10,
+                'col11',    $11,
+                'col12',    $12,
+                'col13',    $13,
+                'col14',    $14,
+                'col15',    $15,
+                'col16',    $16
+            )
+        FROM
+            @my_blob_stage
+    ) FILE_FORMAT = (FORMAT_NAME = 'project_db.project_schema.csv_ff') PATTERN = '.*\.csv';
+    ------------------------------------------------------------------------------
+select
+    *
+from
+    EMP_SCHEMA.HIGH_PERFORMERS;
+truncate table EMP_SCHEMA.HIGH_PERFORMERS;
+insert into
+    EMP_SCHEMA.HIGH_PERFORMERS
+SELECT
+    RAW_DATA:col1::NUMBER(38, 0) AS EMPLOYEE_ID,
+    RAW_DATA:col2::DATE AS REVIEW_DATE,
+    RAW_DATA:col3::NUMBER(38, 1) AS PERFORMANCE_SCORE,
+    RAW_DATA:col4::NUMBER(38, 7) AS SALES_AMOUNT,
+    RAW_DATA:col5::NUMBER(38, 0) AS PROJECTS_COMPLETED,
+    RAW_DATA:col6::NUMBER(38, 2) AS HOURS_WORKED,
+    RAW_DATA:col7::VARCHAR(16) AS _RESCUED_DATA,
+    RAW_DATA:col8::VARCHAR(16) AS FIRST_NAME,
+    RAW_DATA:col9::VARCHAR(16) AS LAST_NAME,
+    RAW_DATA:col10::VARCHAR(16) AS GENDER,
+    RAW_DATA:col11::DATE AS DATE_OF_BIRTH,
+    RAW_DATA:col12::DATE AS HIRE_DATE,
+    RAW_DATA:col13::NUMBER(38, 0) AS DEPARTMENT_ID,
+    RAW_DATA:col14::VARCHAR(16) AS JOB_TITLE
+FROM
+    EMP_SCHEMA.staging_table
+WHERE
+    FILENAME = 'high_performers_df.csv';
+    ----------------------------------------------------------
+select
+    *
+from
+    EMP_SCHEMA.PERFORMANCE_YR;
+truncate table EMP_SCHEMA.PERFORMANCE_YR;
+insert into
+    EMP_SCHEMA.PERFORMANCE_YR
+SELECT
+    RAW_DATA:col1::NUMBER(38, 0) AS EMPLOYEE_ID,
+    RAW_DATA:col2::NUMBER(38, 0) AS year
+FROM
+    EMP_SCHEMA.staging_table,
+WHERE
+    FILENAME = 'Performance_yr.csv';
+    -----------------------------------------------------
+select
+    *
+from
+    EMP_SCHEMA.AVG_PER_DEPT;
+truncate table EMP_SCHEMA.AVG_PER_DEPT;
+insert into
+    EMP_SCHEMA.AVG_PER_DEPT
+SELECT
+    RAW_DATA:col1::NUMBER(38, 0) AS dept_id,
+    RAW_DATA:col2::NUMBER(38, 2) AS yavg
+FROM
+    EMP_SCHEMA.staging_table,
+WHERE
+    FILENAME = 'average_performance_by_department.csv';
+    --------------------------------------------------------
+select
+    *
+from
+    EMP_SCHEMA.TOTAL_SALES_BY_DEPT;
+truncate table EMP_SCHEMA.TOTAL_SALES_BY_DEPT;
+insert into
+    EMP_SCHEMA.TOTAL_SALES_BY_DEPT
+SELECT
+    RAW_DATA:col1::NUMBER(38, 0) AS dept_id,
+    RAW_DATA:col2::NUMBER(38, 2) AS tot
+FROM
+    EMP_SCHEMA.staging_table,
+WHERE
+    FILENAME = 'total_sales_by_department.csv';
